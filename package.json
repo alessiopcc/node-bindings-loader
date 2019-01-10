@@ -1,0 +1,24 @@
+{
+    "name": "node-bindings-loader",
+    "version": "1.0.0",
+    "description": "",
+    "private": true,
+    "main": "src/index.js",
+    "author": "Alessio Paccoia <alessio.paccoia@cubbit.io>",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/alessiopcc/node-bindings-loader.git"
+    },
+    "scripts": {
+        "pack": "node -e require('./scripts/publish.js').pack()",
+        "publish": "node -e require('./scripts/publish.js').publish()"
+    },
+    "dependencies": {
+        "webpack-sources": "^1.3.0"
+    },
+    "devDependencies": {
+        "fs-extra": "^7.0.1",
+        "rimraf": "^2.6.3"
+    }
+}
