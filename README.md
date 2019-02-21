@@ -20,7 +20,7 @@ module: {
 ```
 
 ## License
-[MIT](https://github.com/alessiopcc/ps-watchdog/blob/master/LICENSE)
+[MIT](https://github.com/alessiopcc/node-bindings-loader/blob/master/LICENSE)
 
 ## Author
 Alessio Paccoia <<alessio.paccoia@cubbit.io>>
