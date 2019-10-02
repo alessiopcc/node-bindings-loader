@@ -1,6 +1,6 @@
 // @ts-nocheck
 const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-sources");
-const {relative} = require('path');
+const {dirname, relative} = require('path');
 
 module.exports = function (source, map)
 {
@@ -29,7 +29,7 @@ module.exports = function (source, map)
                     path: true,
                     module_root: bindings_module.getRoot(this.resourcePath)
                 };
-                const bindings_path = relative(bindings_arg.module_root, bindings_module(bindings_arg)).replace(/\\/g, '/');
+                const bindings_path = relative(dirname(this.resourcePath), bindings_module(bindings_arg)).replace(/\\/g, '/');
                 code.replace(match.index, match.index + match[0].length - 1, `require('./${bindings_path}')`);
             }
             catch(bindings_error)
