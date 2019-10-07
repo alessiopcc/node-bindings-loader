@@ -1,46 +1,90 @@
 // @ts-nocheck
 const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-sources");
-const {dirname, relative} = require('path');
+const {dirname, relative, resolve: path_resolve} = require('path');
 
-module.exports = function (source, map)
+function _bindings(loader, match, code)
+{
+    return new Promise((resolve, reject) =>
+    {
+        loader.resolve(loader.context, 'bindings', (error, module_path) =>
+        {
+            if(error)
+                return reject(error);
+
+            try
+            {
+                const node_module = require(module_path);
+
+                const args = {
+                    bindings: eval(match[1]),
+                    path: true,
+                    module_root: node_module.getRoot(loader.resourcePath)
+                };
+
+                const resolve_path = relative(dirname(loader.resourcePath), node_module(args)).replace(/\\/g, '/');
+                code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
+            }
+            catch(module_error)
+            {
+                return reject(module_error);
+            }
+
+            return resolve();
+        });
+    });
+}
+
+function _node_gyp_build(loader, match, code)
+{
+    return new Promise((resolve, reject) =>
+    {
+        loader.resolve(loader.context, 'node-gyp-build', (error, module_path) =>
+        {
+            if(error)
+                return reject(error);
+
+            try
+            {
+                const node_module = require(module_path);
+
+                let args = dirname(loader.resourcePath);
+                if(match[1] !== '__dirname')
+                    args = path_resolve(args, match[1])
+
+                const resolve_path = relative(dirname(loader.resourcePath), node_module.path(args)).replace(/\\/g, '/');
+                code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
+            }
+            catch(module_error)
+            {
+                return reject(module_error);
+            }
+
+            return resolve();
+        });
+    });
+}
+
+module.exports = async function (source, map)
 {
     const callback = this.async();
 
     const bindings_regex = /\brequire\((?:'bindings'|"bindings")\)\s*\(([^)]*)\)/g;
-    let match = bindings_regex.exec(source);
-    if(!match)
-        return callback(null, source, map);
+    const node_gyp_build_regex = /\brequire\((?:'node-gyp-build'|"node-gyp-build")\)\s*\(([^)]*)\)/g;
 
     const code = new ReplaceSource(map ? new SourceMapSource(source, this.resourcePath, map) : new OriginalSource(source, this.resourcePath));
 
-    this.resolve(this.context, 'bindings', (error, bindings_module_path) =>
+    try
     {
-        if(error)
-            return callback(error);
-
-        const bindings_module = require(bindings_module_path);
-
-        do
-        {
-            try
-            {
-                const bindings_arg = {
-                    bindings: eval(match[1]),
-                    path: true,
-                    module_root: bindings_module.getRoot(this.resourcePath)
-                };
-                const bindings_path = relative(dirname(this.resourcePath), bindings_module(bindings_arg)).replace(/\\/g, '/');
-                code.replace(match.index, match.index + match[0].length - 1, `require('./${bindings_path}')`);
-            }
-            catch(bindings_error)
-            {
-                return callback(bindings_error);
-            }
-
-        }
         while(match = bindings_regex.exec(source))
+            await _bindings(this, match, code);
+        while(match = node_gyp_build_regex.exec(source))
+            await _node_gyp_build(this, match, code);
+    }
+    catch(error)
+    {
+        return callback(error);
+    }
 
-        const bindings_code = code.sourceAndMap();
-        return callback(null, bindings_code.source, bindings_code.map);
-    });
+    const loader_code = code.sourceAndMap();
+    return callback(null, loader_code.source, loader_code.map);
 };
