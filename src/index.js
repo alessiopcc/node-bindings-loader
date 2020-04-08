@@ -1,6 +1,7 @@
 // @ts-nocheck
 const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-sources");
 const {dirname, relative, resolve: path_resolve} = require('path');
+const {runInNewContext} = require('vm');
 
 function _bindings(loader, match, code)
 {
@@ -47,9 +48,10 @@ function _node_gyp_build(loader, match, code)
             {
                 const node_module = require(module_path);
 
-                let args = dirname(loader.resourcePath);
-                if(match[1] !== '__dirname')
-                    args = path_resolve(args, match[1])
+                const args = runInNewContext(match[1], {
+                    __dirname: dirname(loader.resourcePath),
+                    __filename: loader.resourcePath,
+                });
 
                 const resolve_path = relative(dirname(loader.resourcePath), node_module.path(args)).replace(/\\/g, '/');
                 code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
