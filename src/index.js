@@ -1,6 +1,6 @@
 // @ts-nocheck
 const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-sources");
-const {dirname, relative, resolve: path_resolve} = require('path');
+const {dirname, relative} = require('path');
 const {runInNewContext} = require('vm');
 
 function _bindings(loader, match, code)
@@ -17,9 +17,12 @@ function _bindings(loader, match, code)
                 const node_module = require(module_path);
 
                 const args = {
-                    bindings: eval(match[1]),
+                    bindings: runInNewContext(match[1], {
+                        __dirname: dirname(loader.resourcePath),
+                        __filename: loader.resourcePath,
+                    }),
                     path: true,
-                    module_root: node_module.getRoot(loader.resourcePath)
+                    module_root: node_module.getRoot(loader.resourcePath),
                 };
 
                 const resolve_path = relative(dirname(loader.resourcePath), node_module(args)).replace(/\\/g, '/');
