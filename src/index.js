@@ -6,6 +6,7 @@ const {runInNewContext} = require('vm');
 const SUPPORTED_PACKAGES = {
     'bindings': _bindings,
     'node-gyp-build': _node_gyp_build,
+    'node-bindings-loader': _custom_glob,
 }
 
 function _bindings(loader, match, code)
@@ -62,6 +63,42 @@ function _node_gyp_build(loader, match, code)
                 });
 
                 const resolve_path = relative(dirname(loader.resourcePath), node_module.path(args)).replace(/\\/g, '/');
+                code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
+            }
+            catch(module_error)
+            {
+                return reject(module_error);
+            }
+
+            return resolve();
+        });
+    });
+}
+
+function _custom_glob(loader, match, code)
+{
+    return new Promise((resolve, reject) =>
+    {
+        loader.resolve(loader.context, 'glob', (error, module_path) =>
+        {
+            if(error)
+                return reject(error);
+
+            try
+            {
+                const node_module = require(module_path);
+
+                const args = runInNewContext(match[1], {
+                    __dirname: dirname(loader.resourcePath),
+                    __filename: loader.resourcePath,
+                });
+
+                const binding = node_module.sync(args, {cwd: dirname(loader.resourcePath)})[0];
+
+                if(!binding)
+                    throw new Error('Glob cannot find module');
+
+                const resolve_path = binding.replace(/\\/g, '/');
                 code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
             }
             catch(module_error)
