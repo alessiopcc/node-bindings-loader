@@ -3,6 +3,11 @@ const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-source
 const {dirname, relative} = require('path');
 const {runInNewContext} = require('vm');
 
+const SUPPORTED_PACKAGES = {
+    'bindings': _bindings,
+    'node-gyp-build': _node_gyp_build,
+}
+
 function _bindings(loader, match, code)
 {
     return new Promise((resolve, reject) =>
@@ -69,21 +74,23 @@ function _node_gyp_build(loader, match, code)
     });
 }
 
-module.exports = async function (source, map)
+module.exports = async function(source, map)
 {
     const callback = this.async();
 
-    const bindings_regex = /\brequire\((?:'bindings'|"bindings")\)\s*\(([^)]*)\)/g;
-    const node_gyp_build_regex = /\brequire\((?:'node-gyp-build'|"node-gyp-build")\)\s*\(([^)]*)\)/g;
+    const balanced_parenthesis_regex = '\\(((?:[^)(]+|\\((?:[^)(]+|\\([^)(]*\\))*\\))*)\\)'
 
     const code = new ReplaceSource(map ? new SourceMapSource(source, this.resourcePath, map) : new OriginalSource(source, this.resourcePath));
 
     try
     {
-        while(match = bindings_regex.exec(source))
-            await _bindings(this, match, code);
-        while(match = node_gyp_build_regex.exec(source))
-            await _node_gyp_build(this, match, code);
+        for(const package of Object.keys(SUPPORTED_PACKAGES))
+        {
+            const regex = new RegExp(`\\brequire\\((?:'|")${package}(?:'|")\\)\\s*${balanced_parenthesis_regex}`, 'g');
+
+            while(match = regex.exec(source))
+                await SUPPORTED_PACKAGES[package](this, match, code);
+        }
     }
     catch(error)
     {
