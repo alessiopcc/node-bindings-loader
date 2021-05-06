@@ -1,12 +1,12 @@
 // @ts-nocheck
 const {OriginalSource, SourceMapSource, ReplaceSource} = require("webpack-sources");
-const {dirname, relative} = require('path');
 const {runInNewContext} = require('vm');
+const path = require('path');
 
 const SUPPORTED_PACKAGES = {
-    'bindings': _bindings,
-    'node-gyp-build': _node_gyp_build,
-    'node-bindings-loader': _custom_glob,
+    'bindings': {handler: _bindings},
+    'node-gyp-build': {handler: _node_gyp_build},
+    'node-bindings-loader': {method: 'glob', handler: _custom_glob},
 }
 
 function _bindings(loader, match, code)
@@ -20,18 +20,20 @@ function _bindings(loader, match, code)
 
             try
             {
+                const root = path.dirname(loader.resourcePath);
+
                 const node_module = require(module_path);
 
                 const args = {
                     bindings: runInNewContext(match[1], {
-                        __dirname: dirname(loader.resourcePath),
+                        __dirname: root,
                         __filename: loader.resourcePath,
                     }),
                     path: true,
                     module_root: node_module.getRoot(loader.resourcePath),
                 };
 
-                const resolve_path = relative(dirname(loader.resourcePath), node_module(args)).replace(/\\/g, '/');
+                const resolve_path = path.relative(root, node_module(args)).replace(/\\/g, '/');
                 code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
             }
             catch(module_error)
@@ -55,14 +57,16 @@ function _node_gyp_build(loader, match, code)
 
             try
             {
+                const root = path.dirname(loader.resourcePath);
+
                 const node_module = require(module_path);
 
                 const args = runInNewContext(match[1], {
-                    __dirname: dirname(loader.resourcePath),
+                    __dirname: root,
                     __filename: loader.resourcePath,
                 });
 
-                const resolve_path = relative(dirname(loader.resourcePath), node_module.path(args)).replace(/\\/g, '/');
+                const resolve_path = path.relative(root, node_module.path(args)).replace(/\\/g, '/');
                 code.replace(match.index, match.index + match[0].length - 1, `require('./${resolve_path}')`);
             }
             catch(module_error)
@@ -86,14 +90,16 @@ function _custom_glob(loader, match, code)
 
             try
             {
+                const root = path.dirname(loader.resourcePath);
+
                 const node_module = require(module_path);
 
                 const args = runInNewContext(match[1], {
-                    __dirname: dirname(loader.resourcePath),
+                    __dirname: root,
                     __filename: loader.resourcePath,
                 });
 
-                const binding = node_module.sync(args, {cwd: dirname(loader.resourcePath)})[0];
+                const binding = node_module.sync(args, {cwd: root})[0];
 
                 if(!binding)
                     throw new Error('Glob cannot find module');
@@ -111,7 +117,7 @@ function _custom_glob(loader, match, code)
     });
 }
 
-module.exports = async function(source, map)
+async function run(source, map)
 {
     const callback = this.async();
 
@@ -123,10 +129,12 @@ module.exports = async function(source, map)
     {
         for(const package of Object.keys(SUPPORTED_PACKAGES))
         {
-            const regex = new RegExp(`\\brequire\\((?:'|")${package}(?:'|")\\)\\s*${balanced_parenthesis_regex}`, 'g');
+            const method = SUPPORTED_PACKAGES[package].method ? `\\.${SUPPORTED_PACKAGES[package].method}` : '';
+
+            const regex = new RegExp(`\\brequire\\((?:'|")${package}(?:'|")\\)${method}\\s*${balanced_parenthesis_regex}`, 'g');
 
             while(match = regex.exec(source))
-                await SUPPORTED_PACKAGES[package](this, match, code);
+                await SUPPORTED_PACKAGES[package].handler(this, match, code);
         }
     }
     catch(error)
@@ -137,3 +145,19 @@ module.exports = async function(source, map)
     const loader_code = code.sourceAndMap();
     return callback(null, loader_code.source, loader_code.map);
 };
+
+function glob(pattern)
+{
+    const glob_module = require('glob');
+    const root = path.dirname(require('parent-module')())
+
+    const binding = glob_module.sync(pattern, {cwd: root})[0];
+
+    if(!binding)
+        throw new Error('Glob cannot find module');
+
+    return require(path.resolve(root, binding));
+}
+
+module.exports = run;
+module.exports.glob = glob;
