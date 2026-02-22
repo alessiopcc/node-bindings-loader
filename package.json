@@ -15,12 +15,12 @@
         "publish": "node -e require('./scripts/publish.js').publish()"
     },
     "dependencies": {
-        "glob": "^7.1.6",
+        "glob": "^13.0.6",
         "parent-module": "^2.0.0",
         "webpack-sources": "^2.2.0"
     },
     "devDependencies": {
         "fs-extra": "^10.0.0",
-        "rimraf": "^3.0.2"
+        "rimraf": "^6.1.3"
     }
 }
